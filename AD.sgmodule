@@ -1,0 +1,161 @@
+#!name=AD 定向增强版（v12）
+#!desc=仅模块维护；补齐闲鱼异步开屏与旧网关，淘宝开屏改为内联处理，补充淘宝 AMDC 与四个广告网关的 UDP/443 回落规则。
+#!author=定制整合；规则来源：fmz200、ddgksf2013、app2smile、iab0x00、QingRex/LoonKissSurge、Biliverse/ADBlock、Thelongdarkorg/loon-plugins、LOWERTOP/Shadowrocket
+#!update=2026-10-17
+#!arguments=per_filter_video:0
+#!arguments-desc=per_filter_video:设为1时，贴吧推荐页同时隐藏视频贴
+
+[Rule]
+# 淘宝 AMDC：原共享脚本不匹配淘宝中文 UA，按上游仅拒绝淘宝自己的 HTTP 调度请求。
+# 必须在 amdc.m.taobao.com 的 DIRECT 例外之前；闲鱼/高德仍沿用原共享脚本。
+# https://github.com/Thelongdarkorg/loon-plugins/blob/main/taobao_splash_ad_block.plugin
+AND,((URL-REGEX,"^http:\/\/[^\/]+\/amdc\/mobileDispatch(?:\?|$)"),(USER-AGENT,"%E6%B7%98%E5%AE%9D*")),REJECT
+
+# 仅四个网关的 UDP/443：让 HTTP/3 广告请求回落到可解密的 TCP；不全局禁用 UDP。
+# Shadowrocket 的 PROTOCOL,UDP / DST-PORT 写法依据 LOWERTOP/Shadowrocket/lazy.conf。
+AND,((DOMAIN,acs.m.taobao.com),(PROTOCOL,UDP),(DST-PORT,443)),REJECT-NO-DROP
+AND,((DOMAIN,guide-acs.m.taobao.com),(PROTOCOL,UDP),(DST-PORT,443)),REJECT-NO-DROP
+AND,((DOMAIN,acs.m.goofish.com),(PROTOCOL,UDP),(DST-PORT,443)),REJECT-NO-DROP
+AND,((DOMAIN,g-acs.m.goofish.com),(PROTOCOL,UDP),(DST-PORT,443)),REJECT-NO-DROP
+
+# AMDC 由下方响应脚本处理；此规则需位于通用广告域名集之前。
+DOMAIN,amdc.m.taobao.com,DIRECT
+
+# 轻量通用广告域名
+RULE-SET,https://raw.githubusercontent.com/iab0x00/ProxyRules/main/Rule/Block.txt,REJECT
+
+# 百度贴吧广告域名
+RULE-SET,https://raw.githubusercontent.com/app2smile/rules/master/rule/tieba-ad.list,REJECT-DROP
+
+# 微博轻享版缓存广告
+DOMAIN-SUFFIX,api.touch-moblie.com,REJECT
+DOMAIN,adstrategy.biz.weibo.com,REJECT
+
+# 淘宝开屏预加载与统计域名
+DOMAIN,adashx.m.taobao.com,REJECT
+DOMAIN,h-adashx.ut.taobao.com,REJECT
+DOMAIN,ossgw.alicdn.com,REJECT
+DOMAIN,ems.youku.com,REJECT
+DOMAIN,hudong.alicdn.com,REJECT
+DOMAIN,ut.taobao.com,REJECT
+
+[URL Rewrite]
+# 2026-09-08：开屏定向补充；来源见配套复核记录。
+# 高德：仅开屏专用路径；valueadded 开屏响应由上游脚本处理，补全 ai / nogw 主机。
+^https?:\/\/(?:m5|m5-zb|center|amap-aos-info-nogw|ai)\.amap\.com\/ws\/aos\/alimama\/splash_screen(?:_rt)?(?:\/|\?|$) - reject-200
+
+# 智行：仅拦截 tripAds 开屏接口，兼容不同 soa2 编号与 json/scjson 入口。
+# 来源：fmz200/wool_scripts、Walvez/surge-startup-ads；需在本机验证查票及订单页。
+^https?:\/\/m\.ctrip\.com\/restapi\/soa2\/\d+\/(?:scjson|json)\/tripAds(?:\?|$) - reject-200
+
+# 百度网盘：补齐新版本使用的 adv/getconfig/getsyscfg，返回空 JSON；本地缓存是否清除仍需实机验证。
+^https?:\/\/pan\.baidu\.com\/rest\/[^\/]+\/pcs\/(?:ad|adv|adx)(?:\?|$) - reject-dict
+^https?:\/\/pan\.baidu\.com\/api\/(?:getconfig|getsyscfg)(?:\?|$) - reject-dict
+^https?:\/\/pan\.baidu\.com\/api\/useractivity\/activity(?:\?|$) - reject-dict
+^https?:\/\/pan\.baidu\.com\/act\/(?:api\/activityentry|v\d\/(?:bchannel|welfare)\/list|[^\/]+\/bchannel\/list)(?:\?|$) - reject-dict
+^https?:\/\/baichuan\.baidu\.com\/rs\/adpmobile\/launch(?:\?|$) - reject-dict
+^https?:\/\/ndstatic\.cdn\.bcebos\.com\/activity\/welfare\/(?:js\/.+\.js|index\.html) - reject
+^https?:\/\/staticsns\.cdn\.bcebos\.com\/amis\/.+\/banner\.png - reject-img
+^https?:\/\/issuecdn\.baidupcs\.com\/issue\/netdisk\/(?:guanggao|ts_ad)(?:\/|$) - reject
+^https?:\/\/update\.pan\.baidu\.com\/statistics - reject
+
+# 斗鱼：开屏配置与素材
+^https?:\/\/daoyu\.sdo\.com\/api\/userCommon\/getAppStartAd(?:\?|$) - reject-dict
+^https?:\/\/rtbapi\.douyucdn\.cn\/japi\/sign\/app\/getinfo(?:\?|$) - reject-dict
+^https?:\/\/staticlive\.douyucdn\.cn\/.+\/(?:getStartSend)(?:\?|$) - reject-dict
+^https?:\/\/capi\.douyucdn\.cn\/(?:lapi\/sign\/app(?:api)?\/getinfo|api\/v1\/getStartSend)\?[^#]*client_sys=ios - reject-dict
+^https?:\/\/douyucdn\.cn\/.+\/appapi\/getinfo(?:\?|$) - reject-dict
+
+# 京东：新版启动配置；start 响应在 Body Rewrite 中清理。
+^https?:\/\/api\.m\.jd\.com\/client\.action\?(?:[^#]*&)?functionId=home_launchConfig(?:&|$) - reject-dict
+
+# 淘宝：广告下发、二楼/新面孔与大促素材；图片/视频开屏由下方内联正文改写清理。
+# 来源：QingRex/LoonKissSurge 淘宝模块、fmz200/rewrite.snippet；查询参数中的广告标记不加路径边界。
+^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.(?:fliggy\.crm\.screen\.(?:allresource|predict)|alibaba\.advertisementservice\.getadv|alimusic\.common\.mobileservice\.startinit|film\.mtopadvertiseapi\.queryadvertise|o2o\.ad\.gateway\.get|taobao\.idle\.home\.welcome|trip\.activity\.querytmsresources)(?:\/|\?|$) - reject-dict
+^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.alimama\.etao\.config\.query\/[^#]*etao_advertise - reject-dict
+^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.etao\.noah\.query\/[^#]*tao_splash - reject-dict
+^https?:\/\/guide-acs\.m\.taobao\.com\/gw\/mtop\.taobao\.(?:volvo\.secondfloor\.getconfig|wireless\.home\.newface\.awesome\.get)(?:\/|\?|$) - reject-dict
+^https?:\/\/guide-acs\.m\.taobao\.com\/gw\/mtop\.fc\.resource\.tacdata\.get(?:\/|\?|$) - reject-200
+^https?:\/\/(?:gw|heic)\.alicdn\.com\/imgextra\/i\d\/\d*\/?[\w!]+-\d-(?:octopus|tps)-(?:1080|1125)-\d{4}\.(?:jpg|png)_(?:1\d{3}|9\d{2})x(?:\d|1\d{3}|9\d{2})q[59]0 - reject-img
+
+# 闲鱼：补上 splash.async.ads 预取及 acs.m.taobao.com 旧网关；主接口/异步接口均返回空 JSON。
+# 来源：Thelongdarkorg/loon-plugins（2026-10-06）、skernelx/SurgeScripts/xianyu（异步接口独立佐证）。
+# https://github.com/Thelongdarkorg/loon-plugins/blob/main/xianyu_splash_ad_block.plugin
+^https?:\/\/(?:(?:g-)?acs\.m\.goofish\.com|acs\.m\.taobao\.com)\/gw\/mtop[^\/?]*splash\.(?:async\.)?ads(?:\/|\?|$) - reject-dict
+# 闲鱼：上游标注的通用开屏广告接口。
+^https?:\/\/(?:g-)?acs\.m\.goofish\.com\/gw\/mtop\.idle\.ad\.expose(?:\/|\?|$) - reject-200
+
+# 得物：开屏广告
+^https?:\/\/app\.dewu\.com\/api\/v\d+\/app\/advertisement(?:\/|\?|$) - reject-dict
+^https?:\/\/cdn\.poizon\.com\/node-common\/.+\.jpg(?:\?|$) - reject-img
+
+# 美团 / 美团外卖：开屏接口与品牌开屏素材
+^https?:\/\/wmapi\.meituan\.com\/api\/v\d+\/(?:loadInfo|openscreen|startpicture)\? - reject-dict
+^https?:\/\/(?:s3plus|flowplus)\.meituan\.net\/v\d\/\w+\/linglong\/\w+\.(?:gif|jpg|mp4)(?:\?|$) - reject-img
+^https?:\/\/img\.meituan\.net\/(?:bizad|adunion|display|dpmobile|midas)\/.+\.(?:gif|jpg|png)(?:\.webp)?(?:\?|$) - reject-img
+^https?:\/\/s3plus\.meituan\.net\/v1\/mss_\w+\/(?:brandcpt-vedio|waimai-alita)\/\w+\.zip(?:\?|$) - reject-dict
+
+# 淘宝闪购 / 饿了么：开屏图片与视频素材
+^https?:\/\/elemecdn\.com\/.+\/sitemap(?:\?|$) - reject-dict
+^https?:\/\/fuss10\.elemecdn\.com\/.+(?:\/w\/(?:640|750)\/h\/\d{3,4}|\.mp4) - reject-img
+^https?:\/\/(?:cube|nr-op)\.elemecdn\.com\/.+\.jpeg\?[^#]*x-oss-process=image\/resize,m_fill,w_\d{3,},h_\d{3,} - reject-img
+
+# 盒马：启动单页广告；不处理首页商品流。
+^https?:\/\/acs(?:\.|-)m\.(?:taobao|freshippo)\.com\/gw\/mtop\.wdk\.render\.querysinglepage(?:\/|\?|$) - reject-dict
+
+# 支付宝：仅清理公开活动弹层；不解密支付网关，避免影响登录、付款与小程序。
+^https?:\/\/render\.alipay\.com\/p\/s\/h5data\/prod\/[^\/]+\/popup-h5data\.json(?:\?|$) - reject-dict
+
+# 乐刻运动
+^https?:\/\/lens\.leoao\.com\/lens\/.+(?:getUserScheme|queryAppBanners|Advert|popup) - reject-200
+
+# 微博轻享版
+^https?:\/\/weibointl\.api\.weibo\.c(?:n|om)\/portal\.php\?(?:a=get_searching_info&|ct=feed&a=search_topic&) - reject-dict
+^https?:\/\/api\.weibo\.cn\/2\/ad\/weibointl\? - reject-dict
+^https?:\/\/(?:sdk|wb)app\.uve\.weibo\.com\/(?:interface\/sdk\/sdkad\.php|wbapplua\/wbpullad\.lua) - reject-dict
+^https?:\/\/sdkapp\.uve\.weibo\.com\/interface\/sdk\/sdkconfig\.php - reject-dict
+
+[Body Rewrite]
+# 淘宝：按 fmz200/myBlockAds.js 的三个开屏分支内联，保留外层返回结构与非广告字段。
+# https://github.com/fmz200/wool_scripts/blob/main/Scripts/myBlockAds.js
+# 图片：容忍缺少 bizData 的区块；只修改 taobao-splash 下的广告数据。
+http-response-jq ^https:\/\/guide-acs\.m\.taobao\.com\/gw\/mtop\.taobao\.wireless\.home\.splash\.awesome\.get(?:\/|\?|$) 'if ((try .data.containers.splash_home_base.base.sections catch null) | type) == "array" then .data.containers.splash_home_base.base.sections |= map(if ((try .bizData["taobao-splash"].data catch null) | type) == "array" then .bizData["taobao-splash"].data |= map(if type == "object" then . + {"waitTime":"0","times":"0","hotStart":"false","haveVoice":"false","hideTBLogo":"false","enable4G":"false","coldStart":"false","startTime":"3818332800000","endTime":"3818419199000","gmtStart":"2090-12-31 00:00:00","gmtEnd":"2090-12-31 23:59:59","gmtStartMs":"3818332800000","gmtEndMs":"3818419199000"} | if has("imgUrl") then .imgUrl = "" else . end | if has("videoUrl") then .videoUrl = "" else . end else . end) else . end) else . end'
+# 视频：清空广告资源和缓存列表；不匹配商品详情、搜索、订单或普通视频域名。
+http-response-jq ^https:\/\/guide-acs\.m\.taobao\.com\/gw\/mtop\.taobao\.cloudvideo\.video\.query(?:\/|\?|$) 'if (.data | type) == "object" then .data |= (if has("duration") then .duration = "0" else . end | if (.resources | type) == "array" then .resources = [] else . end | if (.caches | type) == "array" then .caches = [] else . end | if has("respTimeInMs") then .respTimeInMs = "3818332800000" else . end) else . end'
+# 活动 PopLayer：沿用已有匹配范围，只清理上游标注的活动素材与开关。
+http-response-jq ^https:\/\/poplayer\.template\.alibaba\.com\/\w+\.json(?:\?|$) 'if ((try .res.images catch null) | type) == "array" then .res.images = [] else . end | if ((try .res.videos catch null) | type) == "array" then .res.videos = [] else . end | if .enable then .enable = false else . end | if ((try .mainRes.images catch null) | type) == "array" then .mainRes.images = [] else . end'
+
+# B 站：只清理开屏 JSON，保留 code/message 与其余返回字段。
+# 路径与字段依据 Biliverse/ADBlock v0.6.27 response.bundle.js；内联处理，减少远程脚本依赖。
+# https://github.com/Biliverse/ADBlock/releases/download/v0.6.27/response.bundle.js
+http-response-jq ^https?:\/\/app\.bili(?:bili\.com|api\.net|api\.com)\/x\/v2\/splash\/(?:list|show|brand\/list|event\/list2)(?:\?|$) 'if (.data | type) == "object" then del(.data.account, .data.event_list, .data.preload, .data.show) else . end'
+
+# 小红书：只处理开屏，保留其他系统设置；字段依据 fmz200/xiaohongshu.js。
+http-response-jq ^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d+\/system_service\/config(?:\?|$) 'if (.data | type) == "object" then del(.data.splash, .data.loading_img) else . end'
+http-response-jq ^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d+\/system_service\/splash_config(?:\?|$) 'if (.data.ads_groups? | type) == "array" then .data.ads_groups |= map(if type == "object" then .start_time = 3818332800 | .end_time = 3818419199 | if (.ads | type) == "array" then .ads |= map(if type == "object" then .start_time = 3818332800 | .end_time = 3818419199 else . end) else . end else . end) else . end'
+
+
+# 京东：保留启动接口正常返回结构，只移除开屏素材与展示次数。
+http-response-jq ^https?:\/\/api\.m\.jd\.com\/client\.action\?(?:[^#]*&)?functionId=start(?:&|$) '.images = [] | .showTimesDaily = 0'
+
+# 微博轻享版：时间线、开屏素材、趋势页、用户中心
+http-response-jq ^https?:\/\/api\.weibo\.cn\/2\/statuses\/unread_hot_timeline(?:\?|$) 'del(.ad, .advertises, .trends) | if .statuses then .statuses |= map(select(((.promotion.type == "ad") or (.mblogtypename | IN("广告", "廣告", "热推", "熱推"))) | not)) end'
+http-response-jq ^https?:\/\/weibointl\.api\.weibo\.c(?:n|om)\/portal\.php\?(?:[^#]*&)?a=get_coopen_ads(?:&|$) '.data |= . + {"ad_list":[],"pic_ad":[],"gdt_video_ad_ios":[],"display_ad":0,"ad_ios_id":null,"app_ad_ios_id":null,"reserve_ad_ios_id":"","reserve_app_ad_ios_id":"","ad_duration":604800,"ad_cd_interval":604800}'
+http-response-jq ^https?:\/\/weibointl\.api\.weibo\.c(?:n|om)\/portal\.php\?(?:[^#]*&)?a=trends(?:&|$) 'if .data.order then .data.order = ["search_topic"] end'
+http-response-jq ^https?:\/\/weibointl\.api\.weibo\.c(?:n|om)\/portal\.php\?(?:[^#]*&)?a=search_topic(?:&|$) 'if .data.search_topic.cards[0].type == "searchtop" then del(.data.search_topic.cards[0]) end'
+http-response-jq ^https?:\/\/weibointl\.api\.weibo\.c(?:n|om)\/portal\.php\?(?:[^#]*&)?a=user_center(?:&|$) 'if .data.cards then .data.cards[].items |= map(select(.type != "personal_vip")) | .data.cards |= map(select((.items | length) > 0)) end'
+
+[Script]
+# 高德与闲鱼：按 ddgksf2013/AmapAds.conf、GoofishAds.conf 补全开屏及 AMDC 处理。
+高德开屏 = type=http-response,pattern=^https?:\/\/(?:m5|m5-zb|center|amap-aos-info-nogw|ai)\.amap\.com\/ws\/valueadded\/alimama\/splash_screen(?:_rt)?(?:\/|\?|$),requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/ddgksf2013/Scripts/refs/heads/master/amap.js
+AMDC调度 = type=http-response,pattern=^http:\/\/(?:amdc\.m\.taobao\.com(?::\d+)?(?:\/|$)|[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)?(?:\.[a-zA-Z0-9_-]+)?(?:\.[a-zA-Z0-9_-]+)?(?::\d+)?\/amdc\/mobileDispatch(?:\/|\?|$)),requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/ddgksf2013/Scripts/refs/heads/master/amdc.js
+
+# 百度贴吧（当前维护版）
+贴吧JSON = type=http-response,pattern=^https?:\/\/(tiebac|c\.tieba)\.baidu\.com\/(c\/(s\/sync|f\/(ad\/getSplashAd|frs\/(page|threadlist|generalTabList)|pb\/(pic)?page|excellent\/personalized))$|tiebaads\/commonbatch\?),requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/app2smile/rules/master/js/tieba-json.js,script-update-interval=0
+贴吧Proto = type=http-response,pattern=^https?:\/\/(tiebac|c\.tieba)\.baidu\.com\/c\/(b\/ad\/adBid|f\/(frs\/(page|threadlist|generalTabList)|ad\/getFeedAd|pb\/page|excellent\/personalized))\?cmd,requires-body=1,binary-body-mode=1,max-size=-1,script-path=https://raw.githubusercontent.com/app2smile/rules/master/js/tieba-proto.js,argument=per_filter_video_thread={{{per_filter_video}}}
+
+# 常见广告联盟：穿山甲、优量汇、快手联盟
+广告联盟JSON = type=http-response,pattern=^https:\/\/((api-access\.pangolin-sdk-toutiao|is\.snssdk)\.com\/api\/ad\/union\/sdk\/get_ads|open\.e\.kuaishou\.com\/rest\/e\/v3\/open\/univ$|mi\.gdt\.qq\.com\/gdt_mview\.fcg\?),requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/app2smile/rules/master/js/adsense.js
+
+[MITM]
+hostname = %APPEND% pan.baidu.com, ndstatic.cdn.bcebos.com, staticsns.cdn.bcebos.com, issuecdn.baidupcs.com, update.pan.baidu.com, baichuan.baidu.com, daoyu.sdo.com, rtbapi.douyucdn.cn, staticlive.douyucdn.cn, capi.douyucdn.cn, douyucdn.cn, api.m.jd.com, acs.m.taobao.com, guide-acs.m.taobao.com, poplayer.template.alibaba.com, gw.alicdn.com, heic.alicdn.com, acs.m.goofish.com, app.dewu.com, cdn.poizon.com, wmapi.meituan.com, s3plus.meituan.net, flowplus.meituan.net, img.meituan.net, elemecdn.com, fuss10.elemecdn.com, cube.elemecdn.com, nr-op.elemecdn.com, acs-m.freshippo.com, render.alipay.com, tiebac.baidu.com, lens.leoao.com, api.weibo.cn, weibointl.api.weibo.cn, weibointl.api.weibo.com, sdkapp.uve.weibo.com, wbapp.uve.weibo.com, api-access.pangolin-sdk-toutiao.com, is.snssdk.com, mi.gdt.qq.com, open.e.kuaishou.com, edith.xiaohongshu.com, g-acs.m.goofish.com, m5.amap.com, m5-zb.amap.com, center.amap.com, amap-aos-info-nogw.amap.com, m.ctrip.com, ai.amap.com, app.bilibili.com, app.biliapi.net, app.biliapi.com
