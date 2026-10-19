@@ -1,5 +1,5 @@
-#!name=AD 定向增强版（v13）
-#!desc=仅模块维护；新增小红书首页信息流推广过滤，保留淘宝、闲鱼开屏及异步预加载和原有 App 规则。
+#!name=AD 定向增强版（v14）
+#!desc=仅模块维护；新增闲鱼 AMDC 请求阶段定向拦截，保留小红书信息流、淘宝和闲鱼开屏及异步预加载等既有规则。
 #!author=定制整合；规则来源：fmz200、ddgksf2013、app2smile、iab0x00、QingRex/LoonKissSurge、Biliverse/ADBlock、Thelongdarkorg/loon-plugins、LOWERTOP/Shadowrocket
 #!update=2026-10-19
 #!arguments=per_filter_video:0
@@ -10,6 +10,12 @@
 # 必须在 amdc.m.taobao.com 的 DIRECT 例外之前；闲鱼/高德仍沿用原共享脚本。
 # https://github.com/Thelongdarkorg/loon-plugins/blob/main/taobao_splash_ad_block.plugin
 AND,((URL-REGEX,"^http:\/\/[^\/]+\/amdc\/mobileDispatch(?:\?|$)"),(USER-AGENT,"%E6%B7%98%E5%AE%9D*")),REJECT
+
+# 闲鱼 AMDC：按上游小火箭模块，在请求阶段拒绝闲鱼 UA 的 HTTP 调度。
+# 同时覆盖域名和 IP（含端口），并置于下方 amdc.m.taobao.com 的 DIRECT 例外之前。
+# 保留原响应脚本作为兼容处理；请求路径仅限 mobileDispatch 本身。
+# https://github.com/fmz200/wool_scripts/blob/main/Shadowrocket/module/split/partX/XianYu.srmodule
+AND,((URL-REGEX,"^http:\/\/[^\/]+\/amdc\/mobileDispatch(?:\?|$)"),(USER-AGENT,"%E9%97%B2%E9%B1%BC*")),REJECT
 
 # 仅四个网关的 UDP/443：让 HTTP/3 广告请求回落到可解密的 TCP；不全局禁用 UDP。
 # Shadowrocket 的 PROTOCOL,UDP / DST-PORT 写法依据 LOWERTOP/Shadowrocket/lazy.conf。
