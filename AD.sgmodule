@@ -1,5 +1,5 @@
-#!name=AD 定向增强版（v15）
-#!desc=仅模块维护；新增 B站首页标准推广及轮播广告过滤，保留普通直播推荐和闲鱼 AMDC、小红书信息流等既有规则。
+#!name=AD 定向增强版（v16）
+#!desc=仅模块维护；B站首页定向过滤“厚德载玉缘”的直播推荐，保留其他直播、该账号普通视频及既有 App 去广告规则。
 #!author=定制整合；规则来源：fmz200、ddgksf2013、app2smile、iab0x00、QingRex/LoonKissSurge、Biliverse/ADBlock、Thelongdarkorg/loon-plugins、LOWERTOP/Shadowrocket
 #!update=2026-10-19
 #!arguments=per_filter_video:0
@@ -141,12 +141,14 @@ http-response-jq ^https:\/\/poplayer\.template\.alibaba\.com\/\w+\.json(?:\?|$) 
 # https://github.com/Biliverse/ADBlock/releases/download/v0.6.27/response.bundle.js
 http-response-jq ^https?:\/\/app\.bili(?:bili\.com|api\.net|api\.com)\/x\/v2\/splash\/(?:list|show|brand\/list|event\/list2)(?:\?|$) 'if (.data | type) == "object" then del(.data.account, .data.event_list, .data.preload, .data.show) else . end'
 
-# B 站推荐页：过滤明确标记的推广卡片及轮播广告子项，保留普通视频、直播与正常轮播。
+# B 站推荐页：过滤明确标记的推广卡片及轮播广告子项，保留普通视频、其他直播与正常轮播。
 # 识别依据：Biliverse/ADBlock v0.7.5 isFeedAd / feed index；app2smile/bilibili-json.js 交叉核对。
 # https://github.com/Biliverse/ADBlock/blob/v0.7.5/src/class/ADBlock.mjs
 # https://github.com/Biliverse/ADBlock/blob/v0.7.5/src/process/Response.mjs
 # ad_info 单独出现可能是正常内容；直播/带货类型本身不作为广告判断依据。
-http-response-jq ^https?:\/\/app\.bili(?:bili\.com|api\.net)\/x\/v2\/feed\/index(?:\?|$) 'def bili_prefix($p): if type == "string" then startswith($p) else false end; def bili_ad: if type == "object" then ((.card_type | bili_prefix("cm_")) or (.card_goto | bili_prefix("ad_")) or (.goto == "ad") or (.is_ad == true)) else false end; if type == "object" then if (.code == 0) and (((try .data.items catch null) | type) == "array") then .data.items |= map(select(bili_ad | not) | if type == "object" then if ((.card_type == "banner_v8" or .card_type == "banner_ipad_v8") and .card_goto == "banner" and (.banner_item | type) == "array") then .banner_item |= map(select(if type == "object" then (.type != "ad" and .type != "ad_inline") else true end)) else . end else . end) else . end else . end'
+# 定制：只过滤 small_cover_v9 / live 且 args.up_name 等于截图账号“厚德载玉缘”的首页直播卡片。
+# 字段依据上方 Response.mjs 的直播分支；不猜 UID，账号更名后需调整。该账号普通视频仍保留。
+http-response-jq ^https?:\/\/app\.bili(?:bili\.com|api\.net)\/x\/v2\/feed\/index(?:\?|$) 'def bili_prefix($p): if type == "string" then startswith($p) else false end; def bili_ad: if type == "object" then ((.card_type | bili_prefix("cm_")) or (.card_goto | bili_prefix("ad_")) or (.goto == "ad") or (.is_ad == true)) else false end; def bili_blocked_live: if type == "object" then ((.card_type == "small_cover_v9") and (.card_goto == "live") and ((try .args.up_name catch null) == "厚德载玉缘")) else false end; if type == "object" then if (.code == 0) and (((try .data.items catch null) | type) == "array") then .data.items |= map(select((bili_ad or bili_blocked_live) | not) | if type == "object" then if ((.card_type == "banner_v8" or .card_type == "banner_ipad_v8") and .card_goto == "banner" and (.banner_item | type) == "array") then .banner_item |= map(select(if type == "object" then (.type != "ad" and .type != "ad_inline") else true end)) else . end else . end) else . end else . end'
 
 # 小红书开屏：保留其他系统设置；字段依据 fmz200/Scripts/xiaohongshu/xiaohongshu.js。
 http-response-jq ^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d+\/system_service\/config(?:\?|$) 'if (.data | type) == "object" then del(.data.splash, .data.loading_img) else . end'
