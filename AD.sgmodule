@@ -1,7 +1,7 @@
-#!name=AD 定向增强版（v17）
-#!desc=仅模块维护；B站推荐页按统一广告标记过滤所有账号，保留无明确广告标记的普通视频与直播及既有 App 去广告规则。
+#!name=AD 定向增强版（v18）
+#!desc=仅模块维护；小红书开屏与首页推广兼容 rnote.com；保留 B站统一广告标记及既有 App 去广告规则。
 #!author=定制整合；规则来源：fmz200、ddgksf2013、app2smile、iab0x00、QingRex/LoonKissSurge、Biliverse/ADBlock、Thelongdarkorg/loon-plugins、LOWERTOP/Shadowrocket
-#!update=2026-10-19
+#!update=2026-10-26
 #!arguments=per_filter_video:0
 #!arguments-desc=per_filter_video:设为1时，贴吧推荐页同时隐藏视频贴
 
@@ -28,6 +28,11 @@ AND,((DOMAIN,g-acs.m.goofish.com),(PROTOCOL,UDP),(DST-PORT,443)),REJECT-NO-DROP
 # QUIC 处理依据 fmz200 小红书模块；范围收窄到已解密的 edith / rec，不扩到整个域名。
 AND,((DOMAIN,edith.xiaohongshu.com),(PROTOCOL,UDP),(DST-PORT,443)),REJECT-NO-DROP
 AND,((DOMAIN,rec.xiaohongshu.com),(PROTOCOL,UDP),(DST-PORT,443)),REJECT-NO-DROP
+# 小红书 rnote.com 别名：沿用已有 API 主机的精确 UDP/443 回落及广告过滤。
+# 来源提交时间：2026-10-25 22:32:11 +0800
+# https://github.com/fmz200/wool_scripts/commit/a3ac59c19a78d6fe1c0d6a5b782ab607427b75b1
+AND,((DOMAIN,edith.rnote.com),(PROTOCOL,UDP),(DST-PORT,443)),REJECT-NO-DROP
+AND,((DOMAIN,rec.rnote.com),(PROTOCOL,UDP),(DST-PORT,443)),REJECT-NO-DROP
 
 # AMDC 由下方响应脚本处理；此规则需位于通用广告域名集之前。
 DOMAIN,amdc.m.taobao.com,DIRECT
@@ -152,14 +157,14 @@ http-response-jq ^https?:\/\/app\.bili(?:bili\.com|api\.net|api\.com)\/x\/v2\/sp
 http-response-jq ^https?:\/\/app\.bili(?:bili\.com|api\.net)\/x\/v2\/feed\/index(?:\?|$) 'def bili_prefix($p): if type == "string" then startswith($p) else false end; def bili_ad: if type == "object" then ((.card_type | bili_prefix("cm_")) or (.card_goto | bili_prefix("ad_")) or (.goto == "ad") or (.is_ad == true) or ((try .ad_info.is_ad catch null) == true)) else false end; if type == "object" then if (.code == 0) and (((try .data.items catch null) | type) == "array") then .data.items |= map(select(bili_ad | not) | if type == "object" then if ((.card_type == "banner_v8" or .card_type == "banner_ipad_v8") and .card_goto == "banner" and (.banner_item | type) == "array") then .banner_item |= map(select(if type == "object" then (.type != "ad" and .type != "ad_inline") else true end)) else . end else . end) else . end else . end'
 
 # 小红书开屏：保留其他系统设置；字段依据 fmz200/Scripts/xiaohongshu/xiaohongshu.js。
-http-response-jq ^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d+\/system_service\/config(?:\?|$) 'if (.data | type) == "object" then del(.data.splash, .data.loading_img) else . end'
-http-response-jq ^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d+\/system_service\/splash_config(?:\?|$) 'if (.data.ads_groups? | type) == "array" then .data.ads_groups |= map(if type == "object" then .start_time = 3818332800 | .end_time = 3818419199 | if (.ads | type) == "array" then .ads |= map(if type == "object" then .start_time = 3818332800 | .end_time = 3818419199 else . end) else . end else . end) else . end'
+http-response-jq ^https?:\/\/edith\.(?:xiaohongshu|rnote)\.com\/api\/sns\/v\d+\/system_service\/config(?:\?|$) 'if (.data | type) == "object" then del(.data.splash, .data.loading_img) else . end'
+http-response-jq ^https?:\/\/edith\.(?:xiaohongshu|rnote)\.com\/api\/sns\/v\d+\/system_service\/splash_config(?:\?|$) 'if (.data.ads_groups? | type) == "array" then .data.ads_groups |= map(if type == "object" then .start_time = 3818332800 | .end_time = 3818419199 | if (.ads | type) == "array" then .ads |= map(if type == "object" then .start_time = 3818332800 | .end_time = 3818419199 else . end) else . end else . end) else . end'
 
 # 小红书首页信息流：只删除含 ads_info 的推广卡片；保留普通笔记、直播、商品笔记及返回结构。
 # 识别字段：fmz200/wool_scripts，提交 2dfe1fa129085015a9abed46b4474d34d4426269（2026-06-05）。
 # https://github.com/fmz200/wool_scripts/blob/main/Scripts/xiaohongshu/xiaohongshu.js
 # 接口主机交叉核对：QingRex/LoonKissSurge/Surge/小红书去广告.sgmodule。
-http-response-jq ^https?:\/\/(?:edith|rec)\.xiaohongshu\.com\/api\/sns\/v6\/homefeed(?:\?|$) 'if type == "object" then if (.data | type) == "array" then .data |= map(if type == "object" then select(has("ads_info") | not) else . end) else . end else . end'
+http-response-jq ^https?:\/\/(?:edith|rec)\.(?:xiaohongshu|rnote)\.com\/api\/sns\/v6\/homefeed(?:\?|$) 'if type == "object" then if (.data | type) == "array" then .data |= map(if type == "object" then select(has("ads_info") | not) else . end) else . end else . end'
 
 
 # 京东：保留启动接口正常返回结构，只移除开屏素材与展示次数。
@@ -185,4 +190,4 @@ AMDC调度 = type=http-response,pattern=^http:\/\/(?:amdc\.m\.taobao\.com(?::\d+
 广告联盟JSON = type=http-response,pattern=^https:\/\/((api-access\.pangolin-sdk-toutiao|is\.snssdk)\.com\/api\/ad\/union\/sdk\/get_ads|open\.e\.kuaishou\.com\/rest\/e\/v3\/open\/univ$|mi\.gdt\.qq\.com\/gdt_mview\.fcg\?),requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/app2smile/rules/master/js/adsense.js
 
 [MITM]
-hostname = %APPEND% pan.baidu.com, ndstatic.cdn.bcebos.com, staticsns.cdn.bcebos.com, issuecdn.baidupcs.com, update.pan.baidu.com, baichuan.baidu.com, daoyu.sdo.com, rtbapi.douyucdn.cn, staticlive.douyucdn.cn, capi.douyucdn.cn, douyucdn.cn, api.m.jd.com, acs.m.taobao.com, guide-acs.m.taobao.com, poplayer.template.alibaba.com, gw.alicdn.com, heic.alicdn.com, acs.m.goofish.com, app.dewu.com, cdn.poizon.com, wmapi.meituan.com, s3plus.meituan.net, flowplus.meituan.net, img.meituan.net, elemecdn.com, fuss10.elemecdn.com, cube.elemecdn.com, nr-op.elemecdn.com, acs-m.freshippo.com, render.alipay.com, tiebac.baidu.com, lens.leoao.com, api.weibo.cn, weibointl.api.weibo.cn, weibointl.api.weibo.com, sdkapp.uve.weibo.com, wbapp.uve.weibo.com, api-access.pangolin-sdk-toutiao.com, is.snssdk.com, mi.gdt.qq.com, open.e.kuaishou.com, edith.xiaohongshu.com, g-acs.m.goofish.com, m5.amap.com, m5-zb.amap.com, center.amap.com, amap-aos-info-nogw.amap.com, m.ctrip.com, ai.amap.com, app.bilibili.com, app.biliapi.net, app.biliapi.com, rec.xiaohongshu.com
+hostname = %APPEND% pan.baidu.com, ndstatic.cdn.bcebos.com, staticsns.cdn.bcebos.com, issuecdn.baidupcs.com, update.pan.baidu.com, baichuan.baidu.com, daoyu.sdo.com, rtbapi.douyucdn.cn, staticlive.douyucdn.cn, capi.douyucdn.cn, douyucdn.cn, api.m.jd.com, acs.m.taobao.com, guide-acs.m.taobao.com, poplayer.template.alibaba.com, gw.alicdn.com, heic.alicdn.com, acs.m.goofish.com, app.dewu.com, cdn.poizon.com, wmapi.meituan.com, s3plus.meituan.net, flowplus.meituan.net, img.meituan.net, elemecdn.com, fuss10.elemecdn.com, cube.elemecdn.com, nr-op.elemecdn.com, acs-m.freshippo.com, render.alipay.com, tiebac.baidu.com, lens.leoao.com, api.weibo.cn, weibointl.api.weibo.cn, weibointl.api.weibo.com, sdkapp.uve.weibo.com, wbapp.uve.weibo.com, api-access.pangolin-sdk-toutiao.com, is.snssdk.com, mi.gdt.qq.com, open.e.kuaishou.com, edith.xiaohongshu.com, g-acs.m.goofish.com, m5.amap.com, m5-zb.amap.com, center.amap.com, amap-aos-info-nogw.amap.com, m.ctrip.com, ai.amap.com, app.bilibili.com, app.biliapi.net, app.biliapi.com, rec.xiaohongshu.com, edith.rnote.com, rec.rnote.com
