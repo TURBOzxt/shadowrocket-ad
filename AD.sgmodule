@@ -1,5 +1,5 @@
-#!name=AD 定向增强版（v19）
-#!desc=仅模块维护；新增 B站播放页及异步回填 CM 广告容器定向过滤；保留首页、开屏及既有其他 App 规则。
+#!name=AD 定向增强版（v20）
+#!desc=仅模块维护；闲鱼开屏定向清空广告池、广告来源与实时广告；保留 B站播放页、首页及既有其他 App 规则。
 #!author=定制整合；规则来源：fmz200、ddgksf2013、app2smile、iab0x00、QingRex/LoonKissSurge、Biliverse/ADBlock、Thelongdarkorg/loon-plugins、LOWERTOP/Shadowrocket
 #!update=2026-10-30
 #!arguments=per_filter_video:0
@@ -94,10 +94,10 @@ DOMAIN,ut.taobao.com,REJECT
 ^https?:\/\/guide-acs\.m\.taobao\.com\/gw\/mtop\.fc\.resource\.tacdata\.get(?:\/|\?|$) - reject-200
 ^https?:\/\/(?:gw|heic)\.alicdn\.com\/imgextra\/i\d\/\d*\/?[\w!]+-\d-(?:octopus|tps)-(?:1080|1125)-\d{4}\.(?:jpg|png)_(?:1\d{3}|9\d{2})x(?:\d|1\d{3}|9\d{2})q[59]0 - reject-img
 
-# 闲鱼：补上 splash.async.ads 预取及 acs.m.taobao.com 旧网关；主接口/异步接口均返回空 JSON。
+# 闲鱼：已核实的主开屏 2.0 / 异步 1.0 交给下方正文清理；其他既有 splash 入口保持原空 JSON 拦截。
 # 来源：Thelongdarkorg/loon-plugins（2026-10-06）、skernelx/SurgeScripts/xianyu（异步接口独立佐证）。
 # https://github.com/Thelongdarkorg/loon-plugins/blob/main/xianyu_splash_ad_block.plugin
-^https?:\/\/(?:(?:g-)?acs\.m\.goofish\.com|acs\.m\.taobao\.com)\/gw\/mtop[^\/?]*splash\.(?:async\.)?ads(?:\/|\?|$) - reject-dict
+^https?:\/\/(?:(?:g-)?acs\.m\.goofish\.com|acs\.m\.taobao\.com)\/gw\/mtop(?!\.taobao\.idlecommerce\.splash\.(?:ads\/2\.0|async\.ads\/1\.0)\/?(?:\?|$))[^\/?]*splash\.(?:async\.)?ads(?:\/|\?|$) - reject-dict
 # 闲鱼：上游标注的通用开屏广告接口。
 ^https?:\/\/(?:g-)?acs\.m\.goofish\.com\/gw\/mtop\.idle\.ad\.expose(?:\/|\?|$) - reject-200
 
@@ -140,6 +140,15 @@ http-response-jq ^https:\/\/guide-acs\.m\.taobao\.com\/gw\/mtop\.taobao\.wireles
 http-response-jq ^https:\/\/guide-acs\.m\.taobao\.com\/gw\/mtop\.taobao\.cloudvideo\.video\.query(?:\/|\?|$) 'if (.data | type) == "object" then .data |= (if has("duration") then .duration = "0" else . end | if (.resources | type) == "array" then .resources = [] else . end | if (.caches | type) == "array" then .caches = [] else . end | if has("respTimeInMs") then .respTimeInMs = "3818332800000" else . end) else . end'
 # 活动 PopLayer：沿用已有匹配范围，只清理上游标注的活动素材与开关。
 http-response-jq ^https:\/\/poplayer\.template\.alibaba\.com\/\w+\.json(?:\?|$) 'if ((try .res.images catch null) | type) == "array" then .res.images = [] else . end | if ((try .res.videos catch null) | type) == "array" then .res.videos = [] else . end | if .enable then .enable = false else . end | if ((try .mainRes.images catch null) | type) == "array" then .mainRes.images = [] else . end'
+
+# 闲鱼：主开屏 2.0 / 异步预加载 1.0 保留成功返回结构，只清理已存在的广告字段。
+# iOS 7.28.70 静态分析：adMap / dspList / realTimeAd；上游实机效果仍待验证。
+# https://github.com/LazingLuo/LazingLuo_Loon-Rules/commit/82719edb9be6484d68137199d1289394c3df4db9
+# 异步 adMap 独立佐证：https://github.com/skernelx/SurgeScripts/blob/bc8d8275d379ab060466bf42b783a3f5fb0464be/xianyu/xianyu-ad-block.js
+# 校验 api / v / SUCCESS 与字段类型；异常或缺少广告字段时保持原数据。
+# 保留 requestId、config、spaceIdMap、hotStartInterval 及其他字段；不改热启动间隔，不新增解密主机。
+http-response-jq ^https?:\/\/(?:(?:g-)?acs\.m\.goofish\.com|acs\.m\.taobao\.com)\/gw\/mtop\.taobao\.idlecommerce\.splash\.ads\/2\.0\/?(?:\?|$) 'def idle_obj: type == "object"; def idle_success: if (.ret | type) == "array" then any(.ret[]; if type == "string" then startswith("SUCCESS::") else false end) else false end; if idle_obj then if .api == "mtop.taobao.idlecommerce.splash.ads" and ((has("v") | not) or .v == "2.0") and idle_success and (.data | idle_obj) then .data |= (if ((has("adMap") | not) or (.adMap | idle_obj)) and ((has("dspList") | not) or ((.dspList | type) == "array")) and ((has("realTimeAd") | not) or .realTimeAd == null or (.realTimeAd | idle_obj)) then (if has("adMap") then .adMap = {} else . end) | (if has("dspList") then .dspList = [] else . end) | (if has("realTimeAd") then .realTimeAd = null else . end) else . end) else . end else . end'
+http-response-jq ^https?:\/\/(?:(?:g-)?acs\.m\.goofish\.com|acs\.m\.taobao\.com)\/gw\/mtop\.taobao\.idlecommerce\.splash\.async\.ads\/1\.0\/?(?:\?|$) 'def idle_obj: type == "object"; def idle_success: if (.ret | type) == "array" then any(.ret[]; if type == "string" then startswith("SUCCESS::") else false end) else false end; if idle_obj then if .api == "mtop.taobao.idlecommerce.splash.async.ads" and ((has("v") | not) or .v == "1.0") and idle_success and (.data | idle_obj) then .data |= (if ((has("adMap") | not) or (.adMap | idle_obj)) and ((has("dspList") | not) or ((.dspList | type) == "array")) and ((has("realTimeAd") | not) or .realTimeAd == null or (.realTimeAd | idle_obj)) then (if has("adMap") then .adMap = {} else . end) | (if has("dspList") then .dspList = [] else . end) | (if has("realTimeAd") then .realTimeAd = null else . end) else . end) else . end else . end'
 
 # B 站：只清理开屏 JSON，保留 code/message 与其余返回字段。
 # 路径与字段依据 Biliverse/ADBlock v0.6.27 response.bundle.js；内联处理，减少远程脚本依赖。
