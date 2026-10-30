@@ -1,7 +1,7 @@
-#!name=AD 定向增强版（v18）
-#!desc=仅模块维护；小红书开屏与首页推广兼容 rnote.com；保留 B站统一广告标记及既有 App 去广告规则。
+#!name=AD 定向增强版（v19）
+#!desc=仅模块维护；新增 B站播放页及异步回填 CM 广告容器定向过滤；保留首页、开屏及既有其他 App 规则。
 #!author=定制整合；规则来源：fmz200、ddgksf2013、app2smile、iab0x00、QingRex/LoonKissSurge、Biliverse/ADBlock、Thelongdarkorg/loon-plugins、LOWERTOP/Shadowrocket
-#!update=2026-10-26
+#!update=2026-10-30
 #!arguments=per_filter_video:0
 #!arguments-desc=per_filter_video:设为1时，贴吧推荐页同时隐藏视频贴
 
@@ -178,6 +178,11 @@ http-response-jq ^https?:\/\/weibointl\.api\.weibo\.c(?:n|om)\/portal\.php\?(?:[
 http-response-jq ^https?:\/\/weibointl\.api\.weibo\.c(?:n|om)\/portal\.php\?(?:[^#]*&)?a=user_center(?:&|$) 'if .data.cards then .data.cards[].items |= map(select(.type != "personal_vip")) | .data.cards |= map(select((.items | length) > 0)) end'
 
 [Script]
+# B站：仅 viewunite 主请求与异步回填的顶层 CM 广告容器；不处理视频流、评论或相关推荐。
+# View field 7：app2smile/rules/js/bilibili-proto.js（5890c30ff94aa619ed06ec4f343c609acb6bd461）
+# AIRelateAsync field 1：Biliverse/ADBlock/tests/airelateAsync.test.mjs；异常响应原样放行。
+B站播放页广告容器 = type=http-response,pattern=^https:\/\/(?:app\.bilibili\.com|app\.biliapi\.net|app\.biliapi\.com|grpc\.biliapi\.net)(?::443)?\/bilibili\.app\.viewunite\.v1\.View\/(?:View|AIRelateAsync)(?:\?[^#]*)?$,requires-body=1,binary-body-mode=1,max-size=2097152,script-path=https://raw.githubusercontent.com/TURBOzxt/shadowrocket-ad/main/bilibili-player-ad.js
+
 # 高德与闲鱼：按 ddgksf2013/AmapAds.conf、GoofishAds.conf 补全开屏及 AMDC 处理。
 高德开屏 = type=http-response,pattern=^https?:\/\/(?:m5|m5-zb|center|amap-aos-info-nogw|ai)\.amap\.com\/ws\/valueadded\/alimama\/splash_screen(?:_rt)?(?:\/|\?|$),requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/ddgksf2013/Scripts/refs/heads/master/amap.js
 AMDC调度 = type=http-response,pattern=^http:\/\/(?:amdc\.m\.taobao\.com(?::\d+)?(?:\/|$)|[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)?(?:\.[a-zA-Z0-9_-]+)?(?:\.[a-zA-Z0-9_-]+)?(?::\d+)?\/amdc\/mobileDispatch(?:\/|\?|$)),requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/ddgksf2013/Scripts/refs/heads/master/amdc.js
@@ -190,4 +195,4 @@ AMDC调度 = type=http-response,pattern=^http:\/\/(?:amdc\.m\.taobao\.com(?::\d+
 广告联盟JSON = type=http-response,pattern=^https:\/\/((api-access\.pangolin-sdk-toutiao|is\.snssdk)\.com\/api\/ad\/union\/sdk\/get_ads|open\.e\.kuaishou\.com\/rest\/e\/v3\/open\/univ$|mi\.gdt\.qq\.com\/gdt_mview\.fcg\?),requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/app2smile/rules/master/js/adsense.js
 
 [MITM]
-hostname = %APPEND% pan.baidu.com, ndstatic.cdn.bcebos.com, staticsns.cdn.bcebos.com, issuecdn.baidupcs.com, update.pan.baidu.com, baichuan.baidu.com, daoyu.sdo.com, rtbapi.douyucdn.cn, staticlive.douyucdn.cn, capi.douyucdn.cn, douyucdn.cn, api.m.jd.com, acs.m.taobao.com, guide-acs.m.taobao.com, poplayer.template.alibaba.com, gw.alicdn.com, heic.alicdn.com, acs.m.goofish.com, app.dewu.com, cdn.poizon.com, wmapi.meituan.com, s3plus.meituan.net, flowplus.meituan.net, img.meituan.net, elemecdn.com, fuss10.elemecdn.com, cube.elemecdn.com, nr-op.elemecdn.com, acs-m.freshippo.com, render.alipay.com, tiebac.baidu.com, lens.leoao.com, api.weibo.cn, weibointl.api.weibo.cn, weibointl.api.weibo.com, sdkapp.uve.weibo.com, wbapp.uve.weibo.com, api-access.pangolin-sdk-toutiao.com, is.snssdk.com, mi.gdt.qq.com, open.e.kuaishou.com, edith.xiaohongshu.com, g-acs.m.goofish.com, m5.amap.com, m5-zb.amap.com, center.amap.com, amap-aos-info-nogw.amap.com, m.ctrip.com, ai.amap.com, app.bilibili.com, app.biliapi.net, app.biliapi.com, rec.xiaohongshu.com, edith.rnote.com, rec.rnote.com
+hostname = %APPEND% pan.baidu.com, ndstatic.cdn.bcebos.com, staticsns.cdn.bcebos.com, issuecdn.baidupcs.com, update.pan.baidu.com, baichuan.baidu.com, daoyu.sdo.com, rtbapi.douyucdn.cn, staticlive.douyucdn.cn, capi.douyucdn.cn, douyucdn.cn, api.m.jd.com, acs.m.taobao.com, guide-acs.m.taobao.com, poplayer.template.alibaba.com, gw.alicdn.com, heic.alicdn.com, acs.m.goofish.com, app.dewu.com, cdn.poizon.com, wmapi.meituan.com, s3plus.meituan.net, flowplus.meituan.net, img.meituan.net, elemecdn.com, fuss10.elemecdn.com, cube.elemecdn.com, nr-op.elemecdn.com, acs-m.freshippo.com, render.alipay.com, tiebac.baidu.com, lens.leoao.com, api.weibo.cn, weibointl.api.weibo.cn, weibointl.api.weibo.com, sdkapp.uve.weibo.com, wbapp.uve.weibo.com, api-access.pangolin-sdk-toutiao.com, is.snssdk.com, mi.gdt.qq.com, open.e.kuaishou.com, edith.xiaohongshu.com, g-acs.m.goofish.com, m5.amap.com, m5-zb.amap.com, center.amap.com, amap-aos-info-nogw.amap.com, m.ctrip.com, ai.amap.com, app.bilibili.com, app.biliapi.net, app.biliapi.com, rec.xiaohongshu.com, edith.rnote.com, rec.rnote.com, grpc.biliapi.net
